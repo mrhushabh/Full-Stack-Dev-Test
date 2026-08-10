@@ -1,0 +1,841 @@
+/*
+ * Designed for a phone held in one hand, in a basement or on a roof.
+ *
+ * Consequences that drove the choices below:
+ *   - 44px minimum on anything tappable; techs wear gloves
+ *   - high contrast and 16px+ body text, because the other lighting condition is
+ *     direct sunlight
+ *   - the running total is pinned to the bottom of the viewport, since "what does
+ *     it come to" is the only question being asked
+ *   - 16px on every input: iOS Safari zooms the viewport on focus below that, and
+ *     that zoom is disorienting mid-job
+ */
+
+/*
+ * Two themes, for two genuinely different working conditions.
+ *
+ * Light is the default and is tuned for DAYLIGHT: warm paper tones and near-black
+ * text. In direct sun a light screen wins, because reflected ambient light works
+ * with you rather than against the backlight -- the common assumption that dark
+ * mode helps outdoors is backwards.
+ *
+ * Dark is for basements, crawlspaces, attics and evening calls, where a white
+ * screen is genuinely blinding.
+ *
+ * The theme follows the OS by default and can be overridden per-device, because a
+ * tech walking down into a basement should be able to flip it without leaving the
+ * app.
+ */
+
+:root,
+:root[data-theme='light'] {
+  --ink: #2c2c2a;
+  --ink-2: #5f5e5a;
+  --ink-3: #888780;
+  --line: #e7e0d4;
+  --line-2: #d8cfbe;
+  --bg: #fdfbf7;
+  --surface: #ffffff;
+  --brand: #1d4a3f;
+  --brand-ink: #ffffff;
+  --brand-soft: #e1f5ee;
+  --warn: #854f0b;
+  --warn-soft: #faeeda;
+  --danger: #993c1d;
+  --danger-soft: #faece7;
+  --ok: #0f6e56;
+  --ok-soft: #e1f5ee;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgb(44 44 42 / 0.05), 0 4px 12px rgb(44 44 42 / 0.04);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --ink: #f2efe7;
+    --ink-2: #c9c4b8;
+    --ink-3: #918d83;
+    --line: #322f28;
+    --line-2: #47433a;
+    --bg: #17150f;
+    --surface: #21201b;
+    --brand: #5dcaa5;
+    --brand-ink: #04342c;
+    --brand-soft: #123a30;
+    --warn: #efb45c;
+    --warn-soft: #3a2b10;
+    --danger: #ef9273;
+    --danger-soft: #3c1f14;
+    --ok: #7fd7b6;
+    --ok-soft: #12352a;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.5);
+  }
+}
+
+/* Manual override wins over the OS preference, in both directions. */
+:root[data-theme='dark'] {
+  --ink: #f2efe7;
+  --ink-2: #c9c4b8;
+  --ink-3: #918d83;
+  --line: #322f28;
+  --line-2: #47433a;
+  --bg: #17150f;
+  --surface: #21201b;
+  --brand: #5dcaa5;
+  --brand-ink: #04342c;
+  --brand-soft: #123a30;
+  --warn: #efb45c;
+  --warn-soft: #3a2b10;
+  --danger: #ef9273;
+  --danger-soft: #3c1f14;
+  --ok: #7fd7b6;
+  --ok-soft: #12352a;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.5);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  font-size: 16px; /* prevents iOS zoom-on-focus */
+  color: inherit;
+}
+
+/* -- shell ---------------------------------------------------------------- */
+
+.app {
+  max-width: 680px;
+  margin: 0 auto;
+  min-height: 100%;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.topbar h1 {
+  font-size: 17px;
+  font-weight: 650;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar .sub {
+  display: block;
+  font-size: 12px;
+  font-weight: 450;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.content {
+  flex: 1;
+  padding: 16px;
+  padding-bottom: 140px; /* clears the pinned total */
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* -- steps ---------------------------------------------------------------- */
+
+.steps {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px 0;
+}
+
+.steps span {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line-2);
+}
+
+.steps span.on {
+  background: var(--brand);
+}
+
+/* -- generic surfaces ----------------------------------------------------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.card > header {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.card > header h2 {
+  font-size: 13px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+
+.card .body {
+  padding: 14px;
+}
+
+.muted {
+  color: var(--ink-3);
+}
+
+.small {
+  font-size: 13px;
+}
+
+.tiny {
+  font-size: 12px;
+}
+
+/* -- buttons -------------------------------------------------------------- */
+
+.btn {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 550;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn.primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--brand-ink);
+}
+
+.btn.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--brand);
+  min-height: 36px;
+  padding: 0 8px;
+}
+
+.btn.block {
+  width: 100%;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+}
+
+.btn.icon {
+  min-height: 36px;
+  min-width: 36px;
+  padding: 0;
+  border-radius: 8px;
+}
+
+/* -- inputs --------------------------------------------------------------- */
+
+.field {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.field:focus {
+  outline: 2px solid var(--brand);
+  outline-offset: -1px;
+}
+
+label.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--ink-2);
+}
+
+/* -- customer list -------------------------------------------------------- */
+
+.picklist {
+  display: flex;
+  flex-direction: column;
+}
+
+.pick {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 14px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+}
+
+.pick:last-child {
+  border-bottom: 0;
+}
+
+.pick:active {
+  background: var(--brand-soft);
+}
+
+.pick .name {
+  font-weight: 600;
+}
+
+.pick .meta {
+  font-size: 13px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+/* -- tags ----------------------------------------------------------------- */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--line);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.tag.brand {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.tag.warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.tag.danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.tag.ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+/* -- presets -------------------------------------------------------------- */
+
+.preset-group + .preset-group {
+  margin-top: 14px;
+}
+
+.preset-group h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  margin-bottom: 8px;
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+@media (min-width: 520px) {
+  .preset-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.preset {
+  text-align: left;
+  padding: 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--surface);
+  color: inherit;
+  min-height: 44px;
+}
+
+.preset:active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.preset .t {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.preset .d {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+/* -- line items ----------------------------------------------------------- */
+
+.line {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.line:last-child {
+  border-bottom: 0;
+}
+
+.line .grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.line .t {
+  font-weight: 550;
+  font-size: 15px;
+}
+
+.line .s {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+.line .amt {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.qty {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 8px;
+}
+
+.qty input {
+  width: 56px;
+  text-align: center;
+  min-height: 36px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.empty {
+  padding: 20px 14px;
+  text-align: center;
+  color: var(--ink-3);
+  font-size: 14px;
+}
+
+/* -- proposal ------------------------------------------------------------- */
+
+.proposal {
+  border: 1px solid var(--line-2);
+  border-left: 3px solid var(--brand);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--bg);
+  font-size: 13px;
+}
+
+.proposal .head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.proposal .why {
+  color: var(--ink-2);
+}
+
+.proposal .alts {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* -- advisories ----------------------------------------------------------- */
+
+.advice {
+  border-radius: var(--radius);
+  padding: 14px;
+  border: 1px solid;
+}
+
+.advice h3 {
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+
+.advice p {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.advice ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.advice li {
+  margin-bottom: 3px;
+}
+
+.advice.replace {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+  color: var(--ink);
+}
+
+.advice.consider,
+.advice.warn {
+  background: var(--warn-soft);
+  border-color: color-mix(in srgb, var(--warn) 30%, transparent);
+  color: var(--ink);
+}
+
+.advice.info {
+  background: var(--surface);
+  border-color: var(--line-2);
+}
+
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* Direct children only -- a descendant selector here boxes the label and value
+   inside each card as well. */
+.compare > div {
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.compare .k {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+  font-weight: 650;
+}
+
+.compare .v {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+
+.compare .n {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+/* -- pinned total --------------------------------------------------------- */
+
+.dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  padding: 12px 16px calc(12px + var(--safe-b));
+  box-shadow: 0 -4px 16px rgb(15 23 42 / 0.06);
+}
+
+.dock-inner {
+  max-width: 680px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dock .fig {
+  flex: 1;
+  min-width: 0;
+}
+
+.dock .k {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  font-weight: 650;
+}
+
+.dock .v {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.dock .r {
+  font-size: 12px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -- customer-facing view ------------------------------------------------- */
+
+.present {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.present .head {
+  padding: 20px;
+  background: var(--brand);
+  color: var(--brand-ink);
+}
+
+.present .head .who {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.present .head .where {
+  font-size: 13px;
+  opacity: 0.9;
+  margin-top: 2px;
+}
+
+.present .hero {
+  padding: 22px 20px;
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+}
+
+.present .hero .k {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  font-weight: 650;
+}
+
+.present .hero .v {
+  font-size: 42px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 4px 0;
+}
+
+.present .hero .r {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.present .sec {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.present .sec h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-3);
+  margin-bottom: 8px;
+}
+
+.present .row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 14px;
+}
+
+.present .row .amt {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.present .row.total {
+  font-size: 18px;
+  font-weight: 700;
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+  padding-top: 10px;
+}
+
+.present .row.credit {
+  color: var(--ok);
+}
+
+.present .fine {
+  padding: 14px 20px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* -- settings ------------------------------------------------------------- */
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  font-size: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.switch:first-of-type {
+  border-top: 0;
+}
+
+.switch input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--brand);
+}
+
+/* -- misc ----------------------------------------------------------------- */
+
+.banner {
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.stack-8 {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stack-12 {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@media print {
+  .topbar,
+  .dock,
+  .steps,
+  .no-print {
+    display: none !important;
+  }
+  .content {
+    padding-bottom: 16px;
+  }
+  .present {
+    border: 0;
+  }
+}

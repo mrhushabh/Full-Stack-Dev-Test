@@ -1,9 +1,19 @@
 # Dependencies
 node_modules/
 venv/
+.venv/
 __pycache__/
 *.pyc
 .env
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
+
+# Local database -- rebuilt and re-seeded from data/ on first run
+*.db
+*.sqlite
+*.sqlite3
 
 # Build output
 dist/
@@ -24,3 +34,6 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# Local agent tooling, not part of the solution
+.claude/

@@ -1,0 +1,8 @@
+# Only needed when running against Postgres instead of the default SQLite.
+#
+#   pip install -r requirements.txt -r requirements-postgres.txt
+#   export FIELD_ESTIMATE_DATABASE_URL="postgresql://user:pass@host/db"
+#
+# Kept separate so the default local setup stays a single dependency file with
+# nothing to compile.
+psycopg[binary]==3.2.3

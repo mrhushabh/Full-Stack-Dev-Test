@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover so the sticky total clears the home indicator on a phone -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0f172a" />
+    <title>Field Estimate</title>
+    <script>
+      // Applied before first paint: reading it in React would flash the wrong
+      // theme for a frame, which in a dark basement is a face full of white.
+      try {
+        var t = localStorage.getItem('field-estimate-theme')
+        if (t === 'light' || t === 'dark')
+          document.documentElement.setAttribute('data-theme', t)
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
