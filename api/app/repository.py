@@ -16,18 +16,21 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.domain import Customer, Equipment, LaborRate
-from app.money import plain
+from app.money import plain, to_money
 from app.models.tables import CustomerRow, EquipmentRow, LaborRateRow
 
 
 def _to_equipment(row: EquipmentRow) -> Equipment:
+    # Quantized on the way out: Postgres NUMERIC(16,6) returns Decimal('3200.000000')
+    # where SQLite's text column returns Decimal('3200'), and the API must not
+    # describe the same catalog differently depending on what is behind it.
     return Equipment(
         id=row.id,
         name=row.name,
         category=row.category,
         brand=row.brand,
         model_number=row.model_number,
-        cost=row.cost,
+        cost=to_money(row.cost),
     )
 
 
@@ -52,7 +55,7 @@ def _to_labor_rate(row: LaborRateRow) -> LaborRate:
     return LaborRate(
         job_type=row.job_type,
         level=row.level,
-        hourly_rate=row.hourly_rate,
+        hourly_rate=to_money(row.hourly_rate),
         min_hours=plain(row.min_hours),
         max_hours=plain(row.max_hours),
     )

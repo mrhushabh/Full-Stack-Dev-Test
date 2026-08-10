@@ -10,6 +10,7 @@ user: how connection URLs are spelled, and how decimals come back.
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 
 import pytest
@@ -85,6 +86,50 @@ def test_normalization_only_rewrites_the_scheme():
 def test_money_reads_the_same_from_either_database(stored, expected):
     """The API must emit identical bytes whichever backend is behind it."""
     assert _money(stored) == expected
+
+
+def test_no_endpoint_leaks_the_storage_scale(client):
+    """Sweep every read endpoint for decimals carrying the database's scale.
+
+    This bug reached production three times through three different routes --
+    saved estimates, then settings, then labour hours -- and was found a fourth
+    time in the equipment catalog only by eyeballing a deployed response. Rather
+    than fix the fourth and wait for a fifth, this asserts the property across the
+    whole surface: nothing the API returns should carry more than two decimal
+    places, because Postgres NUMERIC(16,6) hands back 3200.000000 where SQLite
+    returns 3200.
+    """
+    paths = [
+        "/api/equipment",
+        "/api/labor-rates",
+        "/api/config",
+        "/api/presets",
+        "/api/customers",
+        "/api/customers/CUST006",
+        "/api/customers/CUST006/guidance",
+        "/api/presets/compressor/request?customer_id=CUST006",
+    ]
+
+    long_decimal = re.compile(r'"([a-zA-Z]+)":\s*"(\d+\.\d{3,})"')
+    offenders: list[str] = []
+    for path in paths:
+        body = client.get(path).text
+        offenders += [f"{path} -> {m[0]}={m[1]}" for m in long_decimal.findall(body)]
+
+    assert not offenders, "decimals carrying storage scale: " + "; ".join(offenders)
+
+
+def test_priced_estimate_never_leaks_the_storage_scale(client):
+    long_decimal = re.compile(r'"([a-zA-Z]+)":\s*"(\d+\.\d{3,})"')
+    body = client.post(
+        "/api/estimates",
+        json={
+            "customerId": "CUST006",
+            "equipment": [{"equipmentId": "EQ011", "quantity": 1}],
+            "labor": [{"jobType": "repair", "level": "major", "hours": "4"}],
+        },
+    ).text
+    assert not long_decimal.findall(body)
 
 
 def test_labour_hours_never_carry_the_storage_scale(client):

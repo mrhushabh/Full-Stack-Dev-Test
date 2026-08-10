@@ -10,14 +10,6 @@
 # sees one domain. That means no CORS, and the frontend keeps calling relative
 # paths exactly as it does locally -- there is no API URL baked into the build.
 #
-# ---------------------------------------------------------------------------
-# One manual step
-# ---------------------------------------------------------------------------
-# Render assigns the API its hostname when the service is first created, so the
-# rewrite destination below cannot be known in advance. After the first deploy,
-# replace REPLACE-WITH-API-HOSTNAME with the API service's real host and redeploy
-# the static site. Everything else is automatic.
-#
 # The database URL is deliberately NOT in this file: `sync: false` means Render
 # prompts for it and stores it as a secret. A connection string contains a
 # password and must never be committed.
@@ -52,7 +44,7 @@ services:
       # or every request would be answered with the app shell.
       - type: rewrite
         source: /api/*
-        destination: https://REPLACE-WITH-API-HOSTNAME.onrender.com/api/*
+        destination: https://field-estimate-api.onrender.com/api/*
       # Single-page app fallback, so a refresh or a deep link still loads.
       - type: rewrite
         source: /*
