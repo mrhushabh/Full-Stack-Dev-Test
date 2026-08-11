@@ -1,0 +1,61 @@
+# Render Blueprint -- both halves of the app, defined in code.
+#
+# Two services on purpose:
+#
+#   field-estimate-web   a static site on Render's CDN. The bundle is cached at
+#                        the edge and never touches the API server.
+#   field-estimate-api   the FastAPI service, talking to Postgres.
+#
+# The static site rewrites /api/* through to the API, so the browser only ever
+# sees one domain. That means no CORS, and the frontend keeps calling relative
+# paths exactly as it does locally -- there is no API URL baked into the build.
+#
+# The database URL is deliberately NOT in this file: `sync: false` means Render
+# prompts for it and stores it as a secret. A connection string contains a
+# password and must never be committed.
+
+services:
+  - type: web
+    name: field-estimate-api
+    runtime: python
+    plan: starter
+    rootDir: api
+    # The Postgres driver is only needed in deployment, which is why it lives in
+    # its own requirements file rather than the default local install.
+    buildCommand: pip install -r requirements.txt -r requirements-postgres.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # Hits the database, so a process that started but cannot reach Postgres is
+    # never promoted over the running version.
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: FIELD_ESTIMATE_DATABASE_URL
+        sync: false
+
+  - type: web
+    name: field-estimate-web
+    runtime: static
+    rootDir: web
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    routes:
+      # Order matters: the API rule has to be matched before the catch-all below,
+      # or every request would be answered with the app shell.
+      - type: rewrite
+        source: /api/*
+        destination: https://field-estimate-api.onrender.com/api/*
+      # Single-page app fallback, so a refresh or a deep link still loads.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      # Hashed filenames, so the bundle can be cached hard and permanently.
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      # The shell must not be cached, or a deploy would leave browsers loading an
+      # old index.html that points at assets which no longer exist.
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
