@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.caching import CacheHeaders
 from app.deps import get_repo
 
 from app.db import Base, SessionLocal, engine
@@ -86,6 +87,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Added after CORS so it runs inside it -- a 304 still needs the CORS headers.
+app.add_middleware(CacheHeaders)
 
 app.include_router(customers.router, prefix="/api")
 app.include_router(catalog.router, prefix="/api")

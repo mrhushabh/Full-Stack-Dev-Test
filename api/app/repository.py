@@ -62,15 +62,37 @@ def _to_labor_rate(row: LaborRateRow) -> LaborRate:
 
 
 class Repository:
+    """Reference-data access, memoized for the life of one request.
+
+    Pricing an estimate touches the same rows repeatedly: the equipment is looked
+    up to price it, again to run the sizing and warranty checks, and again by the
+    repair-vs-replace comparison, which prices a whole second estimate through the
+    same code path. That measured ten queries for one keystroke.
+
+    The cache lives on the instance, and FastAPI builds a new instance per request
+    (see `app/deps.py`), so it cannot serve data from an earlier request. That is
+    the point: a request-scoped cache needs no invalidation strategy, because it
+    never outlives the consistent view of the data it was built from.
+    """
+
     def __init__(self, session: Session) -> None:
         self.session = session
+        self._equipment_cache: dict[str, Equipment | None] = {}
+        self._customer_cache: dict[str, Customer | None] = {}
+        self._rate_cache: dict[tuple[str, str], LaborRate | None] = {}
+        self._all_equipment: list[Equipment] | None = None
 
     # -- collections --------------------------------------------------------
 
     @property
     def equipment(self) -> list[Equipment]:
-        rows = self.session.scalars(select(EquipmentRow).order_by(EquipmentRow.id))
-        return [_to_equipment(r) for r in rows]
+        if self._all_equipment is None:
+            rows = self.session.scalars(select(EquipmentRow).order_by(EquipmentRow.id))
+            self._all_equipment = [_to_equipment(r) for r in rows]
+            # Seed the per-id cache too: the replacement-candidate search reads the
+            # whole catalog, and the lines being priced are already in it.
+            self._equipment_cache.update({e.id: e for e in self._all_equipment})
+        return self._all_equipment
 
     @property
     def customers(self) -> list[Customer]:
@@ -85,20 +107,51 @@ class Repository:
     # -- lookups ------------------------------------------------------------
 
     def equipment_by_id(self, equipment_id: str) -> Equipment | None:
-        row = self.session.get(EquipmentRow, equipment_id)
-        return _to_equipment(row) if row else None
+        if equipment_id not in self._equipment_cache:
+            row = self.session.get(EquipmentRow, equipment_id)
+            self._equipment_cache[equipment_id] = _to_equipment(row) if row else None
+        return self._equipment_cache[equipment_id]
 
     def customer_by_id(self, customer_id: str) -> Customer | None:
-        row = self.session.get(CustomerRow, customer_id)
-        return _to_customer(row) if row else None
+        if customer_id not in self._customer_cache:
+            row = self.session.get(CustomerRow, customer_id)
+            self._customer_cache[customer_id] = _to_customer(row) if row else None
+        return self._customer_cache[customer_id]
+
+    def prefetch_equipment(self, equipment_ids: list[str]) -> None:
+        """Load several parts in one query instead of one query each.
+
+        Pricing an estimate with five parts otherwise issued five `SELECT ... WHERE
+        id = ?` statements before anything else ran. Ids that do not exist are
+        cached as None, so an unknown part still raises from the pricing engine
+        rather than silently going missing.
+        """
+        missing = {i for i in equipment_ids if i not in self._equipment_cache}
+        if not missing:
+            return
+        rows = self.session.scalars(
+            select(EquipmentRow).where(EquipmentRow.id.in_(missing))
+        )
+        found = {row.id: _to_equipment(row) for row in rows}
+        for equipment_id in missing:
+            self._equipment_cache[equipment_id] = found.get(equipment_id)
 
     def labor_rate(self, job_type: str, level: str) -> LaborRate | None:
-        row = self.session.scalar(
-            select(LaborRateRow).where(
-                LaborRateRow.job_type == job_type, LaborRateRow.level == level
-            )
-        )
-        return _to_labor_rate(row) if row else None
+        # There are only eleven rate rows in total, and an estimate typically
+        # touches two or three of them. Reading the table once is cheaper than
+        # querying per lookup, and bounded regardless of how the estimate grows.
+        if not self._rate_cache:
+            for rate in self.labor_rates:
+                self._rate_cache[(rate.job_type.value, rate.level)] = rate
+        return self._rate_cache.get((job_type, level))
+
+    def forget(self, customer_id: str) -> None:
+        """Drop a customer from the cache after writing to it.
+
+        Only needed where a request both writes a customer and reads it back --
+        creating one, then returning the stored row.
+        """
+        self._customer_cache.pop(customer_id, None)
 
     def levels_for(self, job_type: str) -> list[str]:
         return list(

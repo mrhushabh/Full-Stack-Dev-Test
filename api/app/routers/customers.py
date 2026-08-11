@@ -71,6 +71,9 @@ def create_customer(
     session.add(row)
     session.commit()
     session.refresh(row)
+    # This request wrote the customer and now reads it back; the read-through
+    # cache must not answer from before the insert.
+    repo.forget(row.id)
     return repo.customer_by_id(row.id)
 
 

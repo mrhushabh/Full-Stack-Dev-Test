@@ -41,6 +41,9 @@ class PricingError(ValueError):
 def _price_equipment(
     request: EstimateRequest, repo: Repository, config: PricingConfig
 ) -> list[PricedEquipmentLine]:
+    # One query for every part on the estimate, rather than one query per part.
+    repo.prefetch_equipment([item.equipment_id for item in request.equipment])
+
     lines: list[PricedEquipmentLine] = []
     for item in request.equipment:
         equipment = repo.equipment_by_id(item.equipment_id)
