@@ -8,6 +8,17 @@ The original brief is in [BRIEF.md](BRIEF.md).
 
 ---
 
+## How this was built
+
+I used Claude Code throughout. It wrote most of the code; the direction and the
+decisions were mine — what to build, what to leave out, the stack, the data model,
+how it's hosted, and pushing back when I disagreed with an approach.
+
+Saying so because it's how I work, and it seems more useful to be upfront than to
+leave it to be guessed at. Happy to talk through any part of it.
+
+---
+
 ## Running it
 
 ```bash
