@@ -132,6 +132,37 @@ def test_unchanged_data_returns_304_with_no_body(client, path):
     assert repeat.content == b""
 
 
+@pytest.mark.parametrize("prefix", ["", "W/"])
+def test_weak_validators_still_match(client, prefix):
+    """A proxy that compresses the response downgrades the ETag to weak.
+
+    Render does this, so a tag sent as `"abc"` comes back as `W/"abc"`. Comparing
+    exactly meant every revalidation missed and returned a full body -- which
+    passed locally, because nothing sits between the test client and the app.
+    RFC 7232 requires weak comparison for If-None-Match.
+    """
+    etag = client.get("/api/presets").headers["etag"].lstrip("W/")
+    repeat = client.get("/api/presets", headers={"If-None-Match": prefix + etag})
+    assert repeat.status_code == 304
+
+
+def test_wildcard_and_multiple_etags_are_handled(client):
+    etag = client.get("/api/presets").headers["etag"]
+    assert client.get("/api/presets", headers={"If-None-Match": "*"}).status_code == 304
+    assert (
+        client.get(
+            "/api/presets", headers={"If-None-Match": f'"stale", {etag}'}
+        ).status_code
+        == 304
+    )
+
+
+def test_a_different_etag_still_returns_the_body(client):
+    response = client.get("/api/presets", headers={"If-None-Match": '"nonsense"'})
+    assert response.status_code == 200
+    assert response.content
+
+
 def test_etag_changes_when_the_data_does(client):
     """A stale price is a worse failure than a slow request."""
     before = client.get("/api/config").headers["etag"]

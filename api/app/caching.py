@@ -40,6 +40,30 @@ CACHEABLE: dict[str, int] = {
 }
 
 
+def _matches(if_none_match: str | None, etag: str) -> bool:
+    """RFC 7232 weak comparison for `If-None-Match`.
+
+    Two things a naive string equality gets wrong.
+
+    A proxy that compresses the response must downgrade the validator to a weak
+    one, so what we send as `"abc"` comes back from the client as `W/"abc"`.
+    Render does exactly this, which meant every revalidation missed and returned a
+    full body -- invisible locally, because there is no proxy in between.
+
+    The header may also carry several tags, or `*`.
+    """
+    if not if_none_match:
+        return False
+    if if_none_match.strip() == "*":
+        return True
+
+    def normalize(tag: str) -> str:
+        tag = tag.strip()
+        return tag[2:] if tag.startswith("W/") else tag
+
+    return normalize(etag) in {normalize(t) for t in if_none_match.split(",")}
+
+
 class CacheHeaders(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
@@ -57,7 +81,7 @@ class CacheHeaders(BaseHTTPMiddleware):
         headers["etag"] = etag
         headers["cache-control"] = f"private, max-age={max_age}, must-revalidate"
 
-        if request.headers.get("if-none-match") == etag:
+        if _matches(request.headers.get("if-none-match"), etag):
             # Nothing changed: answer with headers only. Saves the payload, though
             # not the round trip.
             headers.pop("content-length", None)
