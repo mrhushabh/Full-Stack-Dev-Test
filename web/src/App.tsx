@@ -117,10 +117,42 @@ export default function App() {
     }
   }, [])
 
+  /**
+   * Every step change goes through here so it lands in browser history.
+   *
+   * Without it, the phone's own back gesture -- the most-used control on a
+   * mobile device -- leaves the app entirely, because nothing ever pushed a
+   * history entry to go back to.
+   */
+  const goTo = useCallback((next: Step) => {
+    setStep(next)
+    window.history.pushState({ step: next }, '')
+  }, [])
+
+  useEffect(() => {
+    window.history.replaceState({ step: 'customer' }, '')
+    const onPop = (event: PopStateEvent) => {
+      setStep((event.state?.step as Step) ?? 'customer')
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
   async function selectCustomer(id: string | null) {
+    // Switching to a different customer would leave line items attached to the
+    // wrong property, so ask first. Returning to the same one keeps the work.
+    if ((equipment.length > 0 || labor.length > 0) && id !== customerId) {
+      const ok = window.confirm(
+        'Start a new estimate for this customer? The current one will be cleared.',
+      )
+      if (!ok) return
+      setEquipment([])
+      setLabor([])
+      setResult(null)
+    }
     setCustomerId(id)
     setGuidance(null)
-    setStep('build')
+    goTo('build')
     await loadGuidance(id)
   }
 
@@ -139,16 +171,17 @@ export default function App() {
     setEquipment([])
     setLabor([])
     setResult(null)
-    setStep('build')
+    goTo('build')
   }
 
+  /** Explicit "Clear" only. Going back must never throw work away. */
   function reset() {
     setCustomerId(null)
     setGuidance(null)
     setEquipment([])
     setLabor([])
     setResult(null)
-    setStep('customer')
+    goTo('customer')
   }
 
   const customer = result?.customer ?? guidance?.customer ?? null
@@ -162,9 +195,11 @@ export default function App() {
           <button
             className="btn icon"
             aria-label="Back"
-            onClick={() =>
-              setStep(step === 'present' ? 'build' : (reset(), 'customer'))
-            }
+            // Goes through history rather than setting the step directly, so the
+            // on-screen button and the phone's back gesture behave identically.
+            // It used to clear the whole estimate, which meant tapping back to
+            // check an address threw the job away.
+            onClick={() => window.history.back()}
           >
             ‹
           </button>
@@ -244,7 +279,7 @@ export default function App() {
             <button
               className="btn primary"
               disabled={!hasLines}
-              onClick={() => setStep('present')}
+              onClick={() => goTo('present')}
             >
               Show customer
             </button>

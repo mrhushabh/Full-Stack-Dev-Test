@@ -217,29 +217,21 @@ problems were invisible to a suite that only checked responses.
 
 ## What I'd do differently
 
-**Offline support.** The most realistic omission — techs work in basements with no
-signal. Doing it properly means the pricing engine runs on the client, which
-conflicts with keeping business rules server-side. The honest answer is a signed
-rules bundle cached locally and re-verified before an estimate is sent.
+**Make it work offline.** Techs work in basements and crawlspaces with no signal.
+Right now every price comes from the server, so no signal means no estimate — the
+app is dead exactly where it's needed most. Fixing it means running the pricing on
+the phone, which is the one thing I deliberately kept on the server so nobody can
+change the markup from devtools. The real answer is downloading a signed copy of
+the rules and re-checking it on the server before an estimate counts. That's a
+proper piece of work, not a flag.
 
-**Migrations.** `create_all` has no upgrade path; the first schema change against
-real data needs Alembic.
+**Add migrations.** The app creates tables that don't exist yet. That's fine for a
+fresh database, but it won't change an existing one — so the first time I altered
+a table with real estimates in it, I'd be writing SQL by hand. Alembic handles
+this and I'd add it before anyone relied on the data.
 
-**Navigation.** Back from the build screen currently discards the estimate, and the
-OS back gesture leaves the app — there's no history integration. That's the worst
-remaining bug.
-
-**Generated API types.** `web/src/types.ts` is hand-written and could drift;
-`openapi-typescript` would make that a compile error.
-
-**Presets are my judgement, not data.** A real deployment would derive them from
-"your eight most-quoted jobs this quarter" — the `estimates` table already holds
-what's needed.
-
-**Data the dataset lacks.** No after-hours or emergency rates, and no consumables —
-a compressor swap needs refrigerant and there's nowhere to put it, hence the
-free-text misc line. And `jobType`+`level` as a composite key with non-uniform
-semantics is a schema smell worth normalizing into three separate axes.
-
-**Multi-tech reality.** No auth, no per-tech attribution. `next_customer_id()`
-would race under concurrent writes.
+**Auth, and everything that comes with it.** There's no login, and nothing records
+which tech made which estimate. The same gap shows up in `next_customer_id()`,
+which finds the highest existing ID and adds one — fine for one person, wrong the
+moment two techs add a customer at the same time. It's built as a one-person tool,
+and that's the assumption I'd revisit first.
